@@ -11,17 +11,27 @@ import (
 	"strings"
 )
 
-const headerTraceID = "X-Amzn-Trace-Id"
+type responseBodyWriter struct {
+	gin.ResponseWriter
+	body *bytes.Buffer
+}
+
+func (r responseBodyWriter) Write(b []byte) (int, error) {
+	r.body.Write(b)
+	return r.ResponseWriter.Write(b)
+}
 
 func XRayMiddleware(sn xray.SegmentNamer) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		w := &responseBodyWriter{body: &bytes.Buffer{}, ResponseWriter: c.Writer}
+		c.Writer = w
 		var name string
 		if sn != nil {
 			name = sn.Name(c.Request.Host)
 		} else {
 			name = os.Getenv("XRAY_NAME")
 		}
-		traceId := c.Request.Header.Get(headerTraceID)
+		traceId := c.Request.Header.Get(os.Getenv("XRAY_TRACE"))
 		logTrx := NewTransactionContext(traceId)
 		log := logTrx.LogContext
 		traceHeader := header.FromString(traceId)
@@ -35,6 +45,9 @@ func XRayMiddleware(sn xray.SegmentNamer) gin.HandlerFunc {
 		captureRequestData(c, seg)
 		c.Next()
 		captureResponseData(c, seg)
+		if err := seg.AddMetadata("response", w.body.String()); err != nil {
+			log.Error("Error adding metadata to segment")
+		}
 		log.Info("Trace ID:", seg.TraceID)
 		log.Info("Segment Name:", seg.Name)
 		log.Info("Start Time:", seg.StartTime)
@@ -57,7 +70,7 @@ func captureRequestData(c *gin.Context, seg *xray.Segment) {
 	segmentRequest.XForwardedFor = hasXForwardedFor(r)
 	segmentRequest.ClientIP = clientIP(r)
 	segmentRequest.UserAgent = r.UserAgent()
-	c.Writer.Header().Set(headerTraceID, createTraceHeader(r, seg))
+	c.Writer.Header().Set(os.Getenv("XRAY_TRACE"), createTraceHeader(r, seg))
 }
 
 func captureRequestDataNet(r *http.Request, seg *xray.Segment) {
@@ -175,7 +188,7 @@ func clientIP(r *http.Request) string {
 
 func parseHeaders(h http.Header) map[string]string {
 	m := map[string]string{}
-	s := h.Get(headerTraceID)
+	s := h.Get(os.Getenv("XRAY_TRACE"))
 	for _, c := range strings.Split(s, ";") {
 		p := strings.SplitN(c, "=", 2)
 		k := strings.TrimSpace(p[0])
