@@ -36,6 +36,7 @@ func XRayMiddleware(sn xray.SegmentNamer) gin.HandlerFunc {
 		traceHeader := header.FromString(traceId)
 
 		ctx, seg := xray.NewSegmentFromHeader(c.Request.Context(), name, c.Request, traceHeader)
+		c.Request.Header.Set("Trace-Id", seg.TraceID)
 		logTrx := NewTransactionContext(seg.TraceID)
 		log := logTrx.LogContext
 		log.Info(os.Getenv("XRAY_TRACE"), ": ", traceId)
