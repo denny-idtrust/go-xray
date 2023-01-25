@@ -32,14 +32,13 @@ func XRayMiddleware(sn xray.SegmentNamer) gin.HandlerFunc {
 			name = os.Getenv("XRAY_NAME")
 		}
 		traceId := c.Request.Header.Get(os.Getenv("XRAY_TRACE"))
-		logTrx := NewTransactionContext(traceId)
-		log := logTrx.LogContext
+
 		traceHeader := header.FromString(traceId)
 
-		log.Info(os.Getenv("XRAY_TRACE"), traceId)
-
 		ctx, seg := xray.NewSegmentFromHeader(c.Request.Context(), name, c.Request, traceHeader)
-
+		logTrx := NewTransactionContext(seg.TraceID)
+		log := logTrx.LogContext
+		log.Info(os.Getenv("XRAY_TRACE"), ": ", traceId)
 		c.Request = c.Request.WithContext(ctx)
 
 		captureRequestData(c, seg)
@@ -50,13 +49,14 @@ func XRayMiddleware(sn xray.SegmentNamer) gin.HandlerFunc {
 		}
 		log.Info("Trace ID:", seg.TraceID)
 		log.Info("Segment Name:", seg.Name)
-		log.Info("Start Time:", seg.StartTime)
-		log.Info("End Time:", seg.EndTime)
-		log.Info("Metadata:", seg.Metadata)
+		log.Debug("Start Time:", seg.StartTime)
+		log.Debug("End Time:", seg.EndTime)
+		log.Debug("Metadata:", seg.Metadata)
 
 		seg.Close(nil)
 		// Build
 	}
+
 }
 
 // CaptureRequestData Write request data to segment
@@ -91,7 +91,7 @@ type LoggingRoundTripper struct {
 }
 
 func (lrt LoggingRoundTripper) RoundTrip(req *http.Request) (res *http.Response, e error) {
-	logTrx := NewTransactionContext(lrt.Seg.ParentID)
+	logTrx := NewTransactionContext(lrt.Seg.TraceID)
 	log := logTrx.LogContext
 	// Do "before sending requests" actions here.
 	log.Info("Sending request to ", req.URL)
