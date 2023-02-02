@@ -32,7 +32,6 @@ func XRayMiddleware(sn xray.SegmentNamer) gin.HandlerFunc {
 			name = os.Getenv("XRAY_NAME")
 		}
 		traceId := c.Request.Header.Get(os.Getenv("XRAY_TRACE"))
-		// Loop through headers and add them to the segment
 		amznHeader := c.Request.Header.Values(os.Getenv("XRAY_TRACE"))
 		for _, v := range amznHeader {
 			if strings.Contains(v, "Root=") {
