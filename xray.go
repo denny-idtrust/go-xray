@@ -53,8 +53,7 @@ func XRayMiddleware(sn xray.SegmentNamer) gin.HandlerFunc {
 		if err := seg.AddMetadata("response", w.body.String()); err != nil {
 			log.Error("Error adding metadata to segment")
 		}
-		log.Info("Trace ID:", seg.TraceID)
-		log.Info("Segment Name:", seg.Name)
+		log.Infof("Trace ID: %s - Segment Name: %s", seg.TraceID, seg.Name)
 		log.Debug("Start Time:", seg.StartTime)
 		log.Debug("End Time:", seg.EndTime)
 		log.Debug("Metadata:", seg.Metadata)
@@ -97,6 +96,7 @@ type LoggingRoundTripper struct {
 }
 
 func (lrt LoggingRoundTripper) RoundTrip(req *http.Request) (res *http.Response, e error) {
+
 	logTrx := NewTransactionContext(lrt.Seg.TraceID)
 	log := logTrx.LogContext
 	// Do "before sending requests" actions here.
@@ -109,7 +109,7 @@ func (lrt LoggingRoundTripper) RoundTrip(req *http.Request) (res *http.Response,
 	if e != nil {
 		log.Error("Error: ", e)
 	} else {
-		log.Error("Received response ", res.Status)
+		log.Info("Received response ", res.Status)
 	}
 	defer lrt.Seg.Close(nil)
 
